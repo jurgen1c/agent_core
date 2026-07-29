@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -14,19 +15,22 @@ describe("repository discovery", () => {
   test("finds a parent Git directory", () => {
     const root = temporaryDirectory("agent-core-git-");
     const nested = path.join(root, "src", "nested");
-    fs.mkdirSync(path.join(root, ".git"));
+    initializeGitRepository(root);
     fs.mkdirSync(nested, { recursive: true });
 
     expect(findGitRepositoryRoot(nested)).toBe(root);
   });
 
-  test("recognizes worktree-style .git files", () => {
-    const root = temporaryDirectory("agent-core-worktree-");
-    const nested = path.join(root, "src");
-    fs.writeFileSync(path.join(root, ".git"), "gitdir: /tmp/common.git/worktrees/example\n");
+  test("searches from a symlink target instead of the link parent", () => {
+    const root = temporaryDirectory("agent-core-symlink-git-");
+    const nested = path.join(root, "nested");
+    const linkParent = temporaryDirectory("agent-core-symlink-parent-");
+    const link = path.join(linkParent, "linked-repository");
+    initializeGitRepository(root);
     fs.mkdirSync(nested);
+    fs.symlinkSync(nested, link, "dir");
 
-    expect(findGitRepositoryRoot(nested)).toBe(root);
+    expect(findGitRepositoryRoot(link)).toBe(root);
   });
 
   test("returns null when no Git root exists", () => {
@@ -112,4 +116,11 @@ describe("path containment", () => {
 
 function temporaryDirectory(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function initializeGitRepository(root: string): void {
+  execFileSync("git", ["init", "--quiet"], {
+    cwd: root,
+    stdio: "ignore"
+  });
 }

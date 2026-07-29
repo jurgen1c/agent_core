@@ -1,6 +1,6 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { findUpSync } from "find-up";
 import isPathInsideDependency from "is-path-inside";
 
 export type PathContainmentFailure =
@@ -52,17 +52,31 @@ export function findGitRepositoryRoot(
   const ancestor = nearestExistingAncestor(start);
   if (ancestor === null) return null;
 
-  const cwd = fs.statSync(ancestor).isDirectory() ? ancestor : path.dirname(ancestor);
-  const gitEntry = findUpSync(".git", {
-    cwd,
-    type: "both",
-    allowSymlinks: false,
-    ...(options.stopAt === undefined
-      ? {}
-      : { stopAt: path.resolve(options.stopAt) })
-  });
+  const realAncestor = fs.realpathSync(ancestor);
+  const cwd = fs.statSync(realAncestor).isDirectory()
+    ? realAncestor
+    : path.dirname(realAncestor);
 
-  return gitEntry === undefined ? null : fs.realpathSync(path.dirname(gitEntry));
+  try {
+    const root = fs.realpathSync(execFileSync(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"]
+      }
+    ).trim());
+
+    if (options.stopAt !== undefined) {
+      const stopAt = fs.realpathSync(path.resolve(options.stopAt));
+      if (!isPathInside(stopAt, root)) return null;
+    }
+
+    return root;
+  } catch {
+    return null;
+  }
 }
 
 export function isPathInside(parentPath: string, childPath: string): boolean {

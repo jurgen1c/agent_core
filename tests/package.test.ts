@@ -20,7 +20,6 @@ describe("public package contract", () => {
     expect(packageJson.bin).toBeUndefined();
     expect(packageJson.publishConfig?.access).toBe("public");
     expect(Object.keys(packageJson.dependencies ?? {}).sort()).toEqual([
-      "find-up",
       "is-path-inside",
       "yaml"
     ]);

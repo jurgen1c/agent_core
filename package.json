@@ -61,7 +61,6 @@
     "verify:package": "node scripts/verify-package.mjs"
   },
   "dependencies": {
-    "find-up": "^8.0.0",
     "is-path-inside": "^4.0.0",
     "yaml": "^2.9.0"
   },
