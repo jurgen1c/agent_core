@@ -26,3 +26,10 @@ Flow, and Agentic Development.
 
 The first release is `v0.1.0`. Downstream packages depend on compatible semver
 ranges; their versions do not need to match Core.
+
+For the first publication of this new scoped package, add a repository Actions
+secret named `NPM_TOKEN` containing a granular npm token with permission to
+publish new `@jurgen1c` packages and bypass 2FA. After the bootstrap release,
+remove the secret and configure npm Trusted Publishing for GitHub user
+`jurgen1c`, repository `agent_core`, workflow `publish.yml`, allowed action
+`npm publish`, and no environment.
