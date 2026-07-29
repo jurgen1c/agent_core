@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import isPathInsideDependency from "is-path-inside";
 
@@ -56,26 +56,26 @@ export function findGitRepositoryRoot(
   const cwd = fs.statSync(realAncestor).isDirectory()
     ? realAncestor
     : path.dirname(realAncestor);
+  const stopAt = options.stopAt === undefined
+    ? null
+    : fs.realpathSync(path.resolve(options.stopAt));
+  const temporaryRoot = fs.realpathSync(os.tmpdir());
+  let candidate = cwd;
 
-  try {
-    const root = fs.realpathSync(execFileSync(
-      "git",
-      ["rev-parse", "--show-toplevel"],
-      {
-        cwd,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"]
-      }
-    ).trim());
-
-    if (options.stopAt !== undefined) {
-      const stopAt = fs.realpathSync(path.resolve(options.stopAt));
-      if (!isPathInside(stopAt, root)) return null;
+  while (true) {
+    const isInheritedTemporaryRoot =
+      candidate === temporaryRoot && cwd !== temporaryRoot;
+    if (
+      !isInheritedTemporaryRoot
+      && hasGitMarker(candidate)
+    ) {
+      return candidate;
     }
 
-    return root;
-  } catch {
-    return null;
+    if (candidate === stopAt) return null;
+    const parent = path.dirname(candidate);
+    if (parent === candidate) return null;
+    candidate = parent;
   }
 }
 
@@ -170,5 +170,14 @@ function isSymbolicLink(candidate: string): boolean {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
+  }
+}
+
+function hasGitMarker(candidate: string): boolean {
+  try {
+    const marker = path.join(candidate, ".git");
+    return fs.existsSync(marker) && !fs.lstatSync(marker).isSymbolicLink();
+  } catch {
+    return false;
   }
 }
