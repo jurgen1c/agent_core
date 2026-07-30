@@ -13,7 +13,7 @@ Agent Memory and Agent Flow integration adapter.
 npm install @jurgen1c/agent-core
 ```
 
-Node.js 25 or newer is required. Bun is supported as the development and test
+Node.js 25.9.0 or newer is required. Bun is supported as the development and test
 runtime.
 
 ## Public APIs

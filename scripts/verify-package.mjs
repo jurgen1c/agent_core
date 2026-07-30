@@ -128,7 +128,7 @@ function run(command, args, cwd = repositoryRoot) {
     }
     process.stderr.write(result.stdout ?? "");
     process.stderr.write(result.stderr ?? "");
-    process.exit(result.status ?? 1);
+    process.exit(result.error ? 1 : result.status ?? 1);
   }
 
   return result.stdout.length > 0 ? result.stdout : result.stderr;

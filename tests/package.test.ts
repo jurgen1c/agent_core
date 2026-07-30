@@ -11,6 +11,7 @@ describe("public package contract", () => {
       version: string;
       bin?: unknown;
       dependencies?: Record<string, string>;
+      engines?: { node?: string };
       exports?: Record<string, unknown>;
       publishConfig?: { access?: string };
     };
@@ -19,6 +20,7 @@ describe("public package contract", () => {
     expect(packageJson.version).toBe("0.1.0");
     expect(packageJson.bin).toBeUndefined();
     expect(packageJson.publishConfig?.access).toBe("public");
+    expect(packageJson.engines?.node).toBe(">=25.9.0");
     expect(Object.keys(packageJson.dependencies ?? {}).sort()).toEqual([
       "is-path-inside",
       "yaml"
