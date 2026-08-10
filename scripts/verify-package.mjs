@@ -27,6 +27,8 @@ try {
     "LICENSE",
     "dist/index.js",
     "dist/index.d.ts",
+    "dist/filesystem.js",
+    "dist/filesystem.d.ts",
     "dist/repository.js",
     "dist/repository.d.ts",
     "dist/sqlite.js",
@@ -71,8 +73,13 @@ try {
 import os from "node:os";
 import path from "node:path";
 import * as core from "@jurgen1c/agent-core";
+import {
+  inspectFileSystemPathSync,
+  replaceFileAtomicallySync,
+  withExclusiveFileLockSync
+} from "@jurgen1c/agent-core/filesystem";
 import { resolveContainedPath } from "@jurgen1c/agent-core/repository";
-import { openSqliteDatabase } from "@jurgen1c/agent-core/sqlite";
+import { openSqliteDatabase, sqliteArtifactPaths } from "@jurgen1c/agent-core/sqlite";
 import { parseYamlDocumentOrThrow } from "@jurgen1c/agent-core/yaml";
 
 if (typeof core.findGitRepositoryRoot !== "function") {
@@ -83,6 +90,16 @@ const resolved = resolveContainedPath(root, "artifacts/result.json");
 if (resolved.absolutePath !== path.join(root, "artifacts/result.json")) {
   throw new Error("Repository subpath smoke test failed.");
 }
+const atomicPath = path.join(root, "atomic.txt");
+replaceFileAtomicallySync(atomicPath, "ready", { mode: 0o600 });
+if (inspectFileSystemPathSync(atomicPath).status !== "present") {
+  throw new Error("Filesystem subpath inspection smoke test failed.");
+}
+const lockPath = path.join(root, "smoke.lock");
+withExclusiveFileLockSync(lockPath, () => {
+  if (!fs.existsSync(lockPath)) throw new Error("Filesystem lock smoke test failed.");
+}, { metadata: "smoke" });
+if (fs.existsSync(lockPath)) throw new Error("Filesystem lock release smoke test failed.");
 const yaml = parseYamlDocumentOrThrow("enabled: true\\n");
 if (yaml.enabled !== true) throw new Error("YAML subpath smoke test failed.");
 const database = await openSqliteDatabase(path.join(root, "smoke.sqlite"));
@@ -92,6 +109,10 @@ if (database.get("SELECT value FROM smoke")?.value !== "ready") {
   throw new Error("SQLite subpath smoke test failed.");
 }
 database.close();
+const artifacts = sqliteArtifactPaths(path.join(root, "smoke.sqlite"));
+if (artifacts[3] !== path.join(root, "smoke.sqlite-shm")) {
+  throw new Error("SQLite artifact path smoke test failed.");
+}
 console.log("Agent Core tarball smoke test passed.");
 `
   );

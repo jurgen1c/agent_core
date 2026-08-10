@@ -30,6 +30,15 @@ export type NodeDatabaseSyncConstructor = new (
 export const DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5_000;
 export const MAX_SQLITE_BUSY_TIMEOUT_MS = 2_147_483_647;
 
+export function sqliteArtifactPaths(databasePath: string): [string, string, string, string] {
+  return [
+    databasePath,
+    `${databasePath}-journal`,
+    `${databasePath}-wal`,
+    `${databasePath}-shm`
+  ];
+}
+
 export async function openSqliteDatabase(
   databasePath: string,
   options: OpenSqliteDatabaseOptions = {}

@@ -109,6 +109,47 @@ describe("path containment", () => {
     ).toThrow("Path cannot be a symbolic link");
   });
 
+  test("rejects contained final symlinks only when strict component checks are requested", () => {
+    const root = temporaryDirectory("agent-core-contained-");
+    const target = path.join(root, "target");
+    const link = path.join(root, "link");
+    fs.writeFileSync(target, "value");
+    fs.symlinkSync(target, link, "file");
+
+    expect(resolveContainedPath(root, link).realExistingAncestorPath).toBe(target);
+
+    try {
+      resolveContainedPath(root, link, { rejectSymlinkComponents: true });
+      throw new Error("Expected strict containment to reject the final symlink.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PathContainmentError);
+      expect((error as PathContainmentError).reason).toBe("symlink_component");
+      expect((error as PathContainmentError).symlinkPath).toBe(link);
+    }
+  });
+
+  test("rejects contained intermediate symlinks, including before missing descendants", () => {
+    const root = temporaryDirectory("agent-core-contained-");
+    const target = path.join(root, "target");
+    const link = path.join(root, "link");
+    fs.mkdirSync(target);
+    fs.symlinkSync(target, link, "dir");
+
+    expect(resolveContainedPath(root, "link/missing/file.txt").realExistingAncestorPath)
+      .toBe(target);
+
+    try {
+      resolveContainedPath(root, "link/missing/file.txt", {
+        rejectSymlinkComponents: true
+      });
+      throw new Error("Expected strict containment to reject the intermediate symlink.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PathContainmentError);
+      expect((error as PathContainmentError).reason).toBe("symlink_component");
+      expect((error as PathContainmentError).symlinkPath).toBe(link);
+    }
+  });
+
   test("rejects missing containment roots", () => {
     const root = path.join(temporaryDirectory("agent-core-missing-"), "missing");
 

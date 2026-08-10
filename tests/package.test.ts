@@ -27,6 +27,7 @@ describe("public package contract", () => {
     ]);
     expect(Object.keys(packageJson.exports ?? {}).sort()).toEqual([
       ".",
+      "./filesystem",
       "./repository",
       "./sqlite",
       "./yaml"
@@ -49,5 +50,16 @@ describe("public package contract", () => {
     expect(source).not.toMatch(
       /(?:from|import)\s*\(?\s*["']@jurgen1c\/(?:agent-memory|agent-flow|agentic-development)/
     );
+  });
+
+  test("has no runtime network access", () => {
+    const sourceRoot = path.join(import.meta.dir, "..", "src");
+    const source = fs.readdirSync(sourceRoot)
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => fs.readFileSync(path.join(sourceRoot, file), "utf8"))
+      .join("\n");
+
+    expect(source).not.toMatch(/node:(?:http|https|net|tls|dgram)/);
+    expect(source).not.toMatch(/\b(?:fetch|WebSocket|XMLHttpRequest)\s*\(/);
   });
 });

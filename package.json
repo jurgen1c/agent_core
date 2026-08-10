@@ -29,6 +29,11 @@
       "import": "./dist/repository.js",
       "default": "./dist/repository.js"
     },
+    "./filesystem": {
+      "types": "./dist/filesystem.d.ts",
+      "import": "./dist/filesystem.js",
+      "default": "./dist/filesystem.js"
+    },
     "./sqlite": {
       "types": "./dist/sqlite.d.ts",
       "import": "./dist/sqlite.js",
@@ -51,7 +56,7 @@
   "scripts": {
     "audit": "bun audit --audit-level moderate",
     "build": "bun run build:js && bun run build:types",
-    "build:js": "bun build src/index.ts src/repository.ts src/sqlite.ts src/yaml.ts --target=node --packages=external --outdir=dist",
+    "build:js": "bun build src/index.ts src/filesystem.ts src/repository.ts src/sqlite.ts src/yaml.ts --target=node --packages=external --outdir=dist",
     "build:types": "tsc -p tsconfig.build.json",
     "ci": "bun run audit && bun test && bun run lint && bun run typecheck && bun run build",
     "lint": "eslint .",
@@ -70,6 +75,9 @@
     "eslint": "^10.5.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.62.0"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9"
   },
   "engines": {
     "node": ">=25.9.0"

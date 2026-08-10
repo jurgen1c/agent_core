@@ -7,12 +7,14 @@ export type PathContainmentFailure =
   | "root_missing"
   | "lexical_escape"
   | "symlink_escape"
-  | "final_symlink";
+  | "final_symlink"
+  | "symlink_component";
 
 export class PathContainmentError extends Error {
   readonly reason: PathContainmentFailure;
   readonly rootPath: string;
   readonly candidatePath: string;
+  readonly symlinkPath?: string;
 
   constructor(
     message: string,
@@ -20,6 +22,7 @@ export class PathContainmentError extends Error {
       reason: PathContainmentFailure;
       rootPath: string;
       candidatePath: string;
+      symlinkPath?: string;
     }
   ) {
     super(message);
@@ -27,11 +30,13 @@ export class PathContainmentError extends Error {
     this.reason = input.reason;
     this.rootPath = input.rootPath;
     this.candidatePath = input.candidatePath;
+    this.symlinkPath = input.symlinkPath;
   }
 }
 
 export interface ResolveContainedPathOptions {
   rejectFinalSymlink?: boolean;
+  rejectSymlinkComponents?: boolean;
 }
 
 export interface FindGitRepositoryRootOptions {
@@ -125,6 +130,21 @@ export function resolveContainedPath(
     });
   }
 
+  if (options.rejectSymlinkComponents === true) {
+    const symlinkPath = firstSymlinkComponent(absoluteRootPath, absolutePath);
+    if (symlinkPath !== null) {
+      throw new PathContainmentError(
+        `Path cannot contain symbolic-link components: ${symlinkPath}`,
+        {
+          reason: "symlink_component",
+          rootPath: absoluteRootPath,
+          candidatePath: absolutePath,
+          symlinkPath
+        }
+      );
+    }
+  }
+
   if (options.rejectFinalSymlink === true && isSymbolicLink(absolutePath)) {
     throw new PathContainmentError(`Path cannot be a symbolic link: ${candidatePath}`, {
       reason: "final_symlink",
@@ -162,6 +182,25 @@ export function resolveContainedPath(
     realExistingAncestorPath,
     realRootPath
   };
+}
+
+function firstSymlinkComponent(rootPath: string, candidatePath: string): string | null {
+  const relativePath = path.relative(rootPath, candidatePath);
+  const components = relativePath === "" ? [] : relativePath.split(path.sep);
+  let current = rootPath;
+
+  for (const component of ["", ...components]) {
+    if (component !== "") current = path.join(current, component);
+    try {
+      if (fs.lstatSync(current).isSymbolicLink()) return current;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT" || code === "ENOTDIR") return null;
+      throw error;
+    }
+  }
+
+  return null;
 }
 
 function isSymbolicLink(candidate: string): boolean {
