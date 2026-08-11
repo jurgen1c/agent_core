@@ -436,7 +436,7 @@ function createTemporarySiblingFile(targetPath: string, mode: number): {
   for (let attempt = 0; attempt < MAX_TEMPORARY_FILE_ATTEMPTS; attempt += 1) {
     const temporaryPath = path.join(
       path.dirname(targetPath),
-      `.${path.basename(targetPath)}.${process.pid}.${Date.now()}.${crypto.randomBytes(12).toString("hex")}.tmp`
+      `.agent-core-${crypto.randomBytes(16).toString("hex")}.tmp`
     );
 
     try {

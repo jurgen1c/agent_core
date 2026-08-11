@@ -348,6 +348,17 @@ describe("atomic file replacement", () => {
     expect(temporarySiblings(root)).toEqual([]);
   });
 
+  test("replaces a valid target whose basename approaches filesystem limits", () => {
+    const root = temporaryDirectory("agent-core-atomic-long-name-");
+    const target = path.join(root, "a".repeat(220));
+    fs.writeFileSync(target, "old");
+
+    replaceFileAtomicallySync(target, "new", { syncParentDirectory: false });
+
+    expect(fs.readFileSync(target, "utf8")).toBe("new");
+    expect(temporarySiblings(root)).toEqual([]);
+  });
+
   test("retries a temporary-name collision without touching the colliding file", () => {
     const root = temporaryDirectory("agent-core-atomic-collision-");
     const target = path.join(root, "value.txt");
