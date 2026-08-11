@@ -130,6 +130,10 @@ describe("exclusive file locks", () => {
     if (false) {
       // @ts-expect-error Promise-returning callbacks are excluded from the synchronous API.
       withExclusiveFileLockSync(lockPath, asyncCallback);
+
+      const maybeAsyncCallback: () => string | Promise<string> = () => "completed";
+      // @ts-expect-error Any Promise-like member makes the callback asynchronous.
+      withExclusiveFileLockSync(lockPath, maybeAsyncCallback);
     }
   });
 
@@ -423,6 +427,7 @@ describe("atomic file replacement", () => {
       expect(error).toBeInstanceOf(AtomicFileReplacementError);
       expect((error as AtomicFileReplacementError).operation).toBe("close_temporary_file");
       expect((error as AtomicFileReplacementError).cause).toBe(failure);
+      expect((error as AtomicFileReplacementError).cleanupError).toBeUndefined();
     }
 
     expect(fs.readFileSync(target, "utf8")).toBe("old");

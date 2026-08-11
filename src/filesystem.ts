@@ -63,9 +63,9 @@ interface AcquiredFileLock {
 }
 
 type SynchronousLockCallback<Callback extends () => unknown> =
-  [ReturnType<Callback>] extends [never]
+  [Extract<ReturnType<Callback>, PromiseLike<unknown>>] extends [never]
     ? Callback
-    : ReturnType<Callback> extends PromiseLike<unknown> ? never : Callback;
+    : never;
 
 export function withExclusiveFileLockSync<Callback extends () => unknown>(
   lockPath: string,
@@ -463,7 +463,7 @@ function cleanupTemporaryFile(
     try {
       fs.closeSync(handle);
     } catch (error) {
-      cleanupErrors.push(error);
+      if ((error as NodeJS.ErrnoException).code !== "EBADF") cleanupErrors.push(error);
     }
   }
 

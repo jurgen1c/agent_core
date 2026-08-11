@@ -48,8 +48,9 @@ a dangling symbolic link is present.
 `withExclusiveFileLockSync` creates a lock with exclusive `wx` semantics and
 waits for at most the configured timeout. It never breaks an existing lock.
 Caller metadata may be bytes, a string, or a factory evaluated after acquisition.
-The protected callback must be synchronous; Promise-like results are rejected at
-the type boundary and fail with `invalid_callback` when encountered at runtime.
+The protected callback must be synchronous; return types containing any
+Promise-like member are rejected at the type boundary, and Promise-like results
+fail with `invalid_callback` when encountered at runtime.
 `ExclusiveFileLockError` exposes a product-neutral `reason`, `lockPath`, and
 underlying `cause` so consumers can provide their own messages. The owned lock
 is released when metadata initialization or the protected callback fails. Core
@@ -66,7 +67,9 @@ leave the previous target in place and remove the temporary file.
 `AtomicFileReplacementError` identifies the failed operation and retains the
 cause. Core attempts to flush the parent directory after publication, but treats
 that as best effort because directory handles and directory `fsync` are not
-portable across Node and Bun platforms.
+portable across Node and Bun platforms. Cleanup ignores `EBADF` from a repeated
+close because that descriptor is already closed, while retaining other cleanup
+errors.
 
 ### Strict YAML data parsing
 
