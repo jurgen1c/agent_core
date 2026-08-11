@@ -225,6 +225,19 @@ function acquireExclusiveFileLock(
 }
 
 function cleanupNewFileLock(lockPath: string, handle: number): unknown | undefined {
+  try {
+    const identity = fs.fstatSync(handle);
+    return releaseOwnedFileLock(lockPath, { handle, identity });
+  } catch (ownershipError) {
+    return closeUnverifiedFileLock(lockPath, handle, ownershipError);
+  }
+}
+
+function closeUnverifiedFileLock(
+  lockPath: string,
+  handle: number,
+  ownershipError: unknown
+): unknown {
   let closeError: unknown;
   try {
     fs.closeSync(handle);
@@ -232,13 +245,14 @@ function cleanupNewFileLock(lockPath: string, handle: number): unknown | undefin
     closeError = error;
   }
 
-  const ownershipError = new Error(
-    `Could not verify ownership of ${lockPath}; the lock path was retained for safety.`
+  const retainedPathError = new Error(
+    `Could not verify ownership of ${lockPath}; the lock path was retained for safety.`,
+    { cause: ownershipError }
   );
   return closeError === undefined
-    ? ownershipError
+    ? retainedPathError
     : new AggregateError(
-      [closeError, ownershipError],
+      [closeError, retainedPathError],
       `Multiple failures occurred while safely closing ${lockPath}.`
     );
 }

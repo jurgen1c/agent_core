@@ -15,6 +15,7 @@ afterEach(() => {
   // Bun restores each spy independently and tolerates an already-restored mock.
   for (const method of [
     "lstatSync",
+    "fstatSync",
     "openSync",
     "writeFileSync",
     "fchmodSync",
@@ -198,6 +199,108 @@ describe("exclusive file locks", () => {
     }
 
     expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  test("re-establishes ownership and cleans up after an initial identity failure", () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-identity-"), "work.lock");
+    const failure = Object.assign(new Error("identity failed"), { code: "EIO" });
+    const originalFstat = fs.fstatSync.bind(fs);
+    let attempts = 0;
+    let callbackCalled = false;
+    spyOn(fs, "fstatSync").mockImplementation(((handle, options) => {
+      attempts += 1;
+      if (attempts === 1) throw failure;
+      return originalFstat(handle, options as never);
+    }) as typeof fs.fstatSync);
+
+    try {
+      withExclusiveFileLockSync(lockPath, () => {
+        callbackCalled = true;
+      });
+      throw new Error("Expected lock identity initialization to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("initialize_failed");
+      expect((error as ExclusiveFileLockError).cause).toBe(failure);
+      expect((error as ExclusiveFileLockError).cleanupError).toBeUndefined();
+    }
+
+    expect(attempts).toBe(2);
+    expect(callbackCalled).toBe(false);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  test("retains a replacement lock discovered while recovering from an identity failure", () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-identity-replaced-"), "work.lock");
+    const failure = Object.assign(new Error("identity failed"), { code: "EIO" });
+    const originalFstat = fs.fstatSync.bind(fs);
+    let attempts = 0;
+    let callbackCalled = false;
+    spyOn(fs, "fstatSync").mockImplementation(((handle, options) => {
+      attempts += 1;
+      if (attempts === 1) throw failure;
+      fs.unlinkSync(lockPath);
+      fs.writeFileSync(lockPath, "replacement-owner\n");
+      return originalFstat(handle, options as never);
+    }) as typeof fs.fstatSync);
+
+    try {
+      withExclusiveFileLockSync(lockPath, () => {
+        callbackCalled = true;
+      });
+      throw new Error("Expected lock identity initialization to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("initialize_failed");
+      expect((error as ExclusiveFileLockError).cause).toBe(failure);
+      expect((error as ExclusiveFileLockError).cleanupError).toHaveProperty(
+        "message",
+        expect.stringContaining("refusing to remove")
+      );
+    }
+
+    expect(callbackCalled).toBe(false);
+    expect(fs.readFileSync(lockPath, "utf8")).toBe("replacement-owner\n");
+  });
+
+  test("closes the descriptor and retains the path when ownership cannot be re-established", () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-identity-unverified-"), "work.lock");
+    const firstFailure = Object.assign(new Error("initial identity failed"), { code: "EIO" });
+    const retryFailure = Object.assign(new Error("retry identity failed"), { code: "EIO" });
+    const originalOpen = fs.openSync.bind(fs);
+    const originalFstat = fs.fstatSync.bind(fs);
+    let acquiredHandle: number | undefined;
+    let attempts = 0;
+    let callbackCalled = false;
+    spyOn(fs, "openSync").mockImplementation(((filePath, flags, mode) => {
+      const handle = originalOpen(filePath, flags, mode);
+      if (filePath === lockPath && flags === "wx") acquiredHandle = handle;
+      return handle;
+    }) as typeof fs.openSync);
+    const fstat = spyOn(fs, "fstatSync").mockImplementation((() => {
+      attempts += 1;
+      throw attempts === 1 ? firstFailure : retryFailure;
+    }) as typeof fs.fstatSync);
+
+    try {
+      withExclusiveFileLockSync(lockPath, () => {
+        callbackCalled = true;
+      });
+      throw new Error("Expected lock identity initialization to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("initialize_failed");
+      expect((error as ExclusiveFileLockError).cause).toBe(firstFailure);
+      const cleanupError = (error as ExclusiveFileLockError).cleanupError as Error;
+      expect(cleanupError.message).toContain("retained for safety");
+      expect(cleanupError.cause).toBe(retryFailure);
+    }
+
+    fstat.mockRestore();
+    expect(attempts).toBe(2);
+    expect(callbackCalled).toBe(false);
+    expect(fs.existsSync(lockPath)).toBe(true);
+    expect(() => originalFstat(acquiredHandle!)).toThrow(expect.objectContaining({ code: "EBADF" }));
   });
 
   test("cleans up when metadata writing fails", () => {
