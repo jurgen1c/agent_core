@@ -1,3 +1,4 @@
-export * from "./repository";
-export * from "./sqlite";
-export * from "./yaml";
+export * from "./filesystem.js";
+export * from "./repository.js";
+export * from "./sqlite.js";
+export * from "./yaml.js";

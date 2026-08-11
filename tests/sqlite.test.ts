@@ -7,11 +7,22 @@ import {
   DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
   MAX_SQLITE_BUSY_TIMEOUT_MS,
   openSqliteDatabase,
+  sqliteArtifactPaths,
   type NodeDatabaseSyncConstructor,
   type SqliteBindingValue
 } from "../src/sqlite";
 
 describe("SQLite portability", () => {
+  test("returns the deterministic ordered SQLite artifact paths", () => {
+    const databasePath = "/tmp/example data.v1.sqlite";
+    expect(sqliteArtifactPaths(databasePath)).toEqual([
+      databasePath,
+      `${databasePath}-journal`,
+      `${databasePath}-wal`,
+      `${databasePath}-shm`
+    ]);
+  });
+
   test("opens a Bun database with the default busy timeout", async () => {
     const database = await openSqliteDatabase(tempDatabasePath());
 
