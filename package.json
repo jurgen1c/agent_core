@@ -1,6 +1,6 @@
 {
   "name": "@jurgen1c/agent-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared runtime primitives for Jurgen's agent development packages.",
   "license": "MIT",
   "repository": {

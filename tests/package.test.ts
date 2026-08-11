@@ -17,7 +17,7 @@ describe("public package contract", () => {
     };
 
     expect(packageJson.name).toBe("@jurgen1c/agent-core");
-    expect(packageJson.version).toBe("0.1.0");
+    expect(packageJson.version).toBe("0.2.0");
     expect(packageJson.bin).toBeUndefined();
     expect(packageJson.publishConfig?.access).toBe("public");
     expect(packageJson.engines?.node).toBe(">=25.9.0");
