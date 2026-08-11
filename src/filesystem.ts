@@ -19,6 +19,7 @@ export function inspectFileSystemPathSync(filePath: string): FileSystemPathInspe
 
 export type ExclusiveFileLockFailure =
   | "invalid_options"
+  | "invalid_callback"
   | "acquire_failed"
   | "timeout"
   | "initialize_failed"
@@ -61,18 +62,30 @@ interface AcquiredFileLock {
   identity: fs.Stats;
 }
 
-export function withExclusiveFileLockSync<T>(
+type SynchronousLockCallback<Callback extends () => unknown> =
+  [ReturnType<Callback>] extends [never]
+    ? Callback
+    : ReturnType<Callback> extends PromiseLike<unknown> ? never : Callback;
+
+export function withExclusiveFileLockSync<Callback extends () => unknown>(
   lockPath: string,
-  callback: () => T,
+  callback: SynchronousLockCallback<Callback>,
   options: ExclusiveFileLockOptions = {}
-): T {
+): ReturnType<Callback> {
   const normalizedLockPath = path.resolve(lockPath);
   const normalized = normalizeLockOptions(normalizedLockPath, options);
   const acquired = acquireExclusiveFileLock(normalizedLockPath, normalized);
   let callbackError: unknown;
 
   try {
-    return callback();
+    const result = (callback as () => unknown)();
+    if (isPromiseLike(result)) {
+      throw new ExclusiveFileLockError(
+        `Exclusive file lock callbacks must be synchronous: ${normalizedLockPath}.`,
+        { reason: "invalid_callback", lockPath: normalizedLockPath }
+      );
+    }
+    return result as ReturnType<Callback>;
   } catch (error) {
     callbackError = error;
     throw error;
@@ -92,6 +105,12 @@ export function withExclusiveFileLockSync<T>(
       );
     }
   }
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  ) && typeof (value as { then?: unknown }).then === "function";
 }
 
 interface NormalizedExclusiveFileLockOptions {
@@ -237,7 +256,14 @@ function releaseOwnedFileLock(lockPath: string, acquired: AcquiredFileLock): unk
       ));
     }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") cleanupErrors.push(error);
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      cleanupErrors.push(new Error(
+        `Owned lock path disappeared before it could be released: ${lockPath}`,
+        { cause: error }
+      ));
+    } else {
+      cleanupErrors.push(error);
+    }
   }
 
   try {
@@ -258,7 +284,14 @@ function releaseOwnedFileLock(lockPath: string, acquired: AcquiredFileLock): unk
         ));
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") cleanupErrors.push(error);
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        cleanupErrors.push(new Error(
+          `Owned lock path disappeared while it was being released: ${lockPath}`,
+          { cause: error }
+        ));
+      } else {
+        cleanupErrors.push(error);
+      }
     }
   }
 

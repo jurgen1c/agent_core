@@ -48,12 +48,16 @@ a dangling symbolic link is present.
 `withExclusiveFileLockSync` creates a lock with exclusive `wx` semantics and
 waits for at most the configured timeout. It never breaks an existing lock.
 Caller metadata may be bytes, a string, or a factory evaluated after acquisition.
+The protected callback must be synchronous; Promise-like results are rejected at
+the type boundary and fail with `invalid_callback` when encountered at runtime.
 `ExclusiveFileLockError` exposes a product-neutral `reason`, `lockPath`, and
 underlying `cause` so consumers can provide their own messages. The owned lock
 is released when metadata initialization or the protected callback fails. Core
 checks the lock's filesystem identity before removal and retains the path with a
 `release_failed` error if ownership cannot be proven; cooperating callers must
-not unlink or replace an active pathname-based lock.
+not unlink or replace an active pathname-based lock. Disappearance of the owned
+lock path is also reported as `release_failed` because mutual exclusion can no
+longer be guaranteed.
 
 `replaceFileAtomicallySync` accepts strings or bytes. It exclusively creates a
 random temporary sibling, writes it, applies an explicitly requested mode,

@@ -103,6 +103,36 @@ describe("exclusive file locks", () => {
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
+  test("rejects Promise-returning callbacks at the type and runtime boundaries", async () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-async-"), "work.lock");
+    let continuedAfterAwait = false;
+    const asyncCallback = async () => {
+      await Promise.resolve();
+      continuedAfterAwait = true;
+      return "completed";
+    };
+
+    try {
+      withExclusiveFileLockSync(
+        lockPath,
+        asyncCallback as unknown as () => string
+      );
+      throw new Error("Expected the synchronous lock to reject a Promise result.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("invalid_callback");
+    }
+
+    expect(fs.existsSync(lockPath)).toBe(false);
+    await Promise.resolve();
+    expect(continuedAfterAwait).toBe(true);
+
+    if (false) {
+      // @ts-expect-error Promise-returning callbacks are excluded from the synchronous API.
+      withExclusiveFileLockSync(lockPath, asyncCallback);
+    }
+  });
+
   test("times out without removing or changing an existing lock", () => {
     const lockPath = path.join(temporaryDirectory("agent-core-lock-held-"), "work.lock");
     fs.writeFileSync(lockPath, "existing-owner\n");
@@ -234,6 +264,54 @@ describe("exclusive file locks", () => {
     }
 
     expect(fs.readFileSync(lockPath, "utf8")).toBe("replacement-owner\n");
+  });
+
+  test("reports an owned lock removed during the callback as a release failure", () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-missing-"), "work.lock");
+
+    try {
+      withExclusiveFileLockSync(lockPath, () => {
+        fs.unlinkSync(lockPath);
+      });
+      throw new Error("Expected missing lock ownership to make release fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("release_failed");
+      expect((error as ExclusiveFileLockError).cause).toHaveProperty(
+        "message",
+        expect.stringContaining("disappeared")
+      );
+    }
+
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
+
+  test("reports disappearance between release identity checks", () => {
+    const lockPath = path.join(temporaryDirectory("agent-core-lock-release-race-"), "work.lock");
+    const originalLstat = fs.lstatSync.bind(fs);
+    let lockInspections = 0;
+    spyOn(fs, "lstatSync").mockImplementation(((filePath, options) => {
+      if (filePath === lockPath) {
+        lockInspections += 1;
+        if (lockInspections === 2) fs.unlinkSync(lockPath);
+      }
+      return originalLstat(filePath, options as never);
+    }) as typeof fs.lstatSync);
+
+    try {
+      withExclusiveFileLockSync(lockPath, () => undefined);
+      throw new Error("Expected release-time disappearance to fail.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExclusiveFileLockError);
+      expect((error as ExclusiveFileLockError).reason).toBe("release_failed");
+      expect((error as ExclusiveFileLockError).cause).toHaveProperty(
+        "message",
+        expect.stringContaining("disappeared")
+      );
+    }
+
+    expect(lockInspections).toBe(2);
+    expect(fs.existsSync(lockPath)).toBe(false);
   });
 
   test("distinguishes acquisition failures from contention", () => {
