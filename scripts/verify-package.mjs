@@ -116,6 +116,36 @@ if (artifacts[3] !== path.join(root, "smoke.sqlite-shm")) {
 console.log("Agent Core tarball smoke test passed.");
 `
   );
+  fs.writeFileSync(
+    path.join(consumerRoot, "consumer.ts"),
+    `import {
+  inspectFileSystemPathSync,
+  type FileSystemPathInspection
+} from "@jurgen1c/agent-core";
+import { withExclusiveFileLockSync } from "@jurgen1c/agent-core/filesystem";
+
+const inspection: FileSystemPathInspection = inspectFileSystemPathSync("package.json");
+withExclusiveFileLockSync("consumer.lock", () => inspection.status);
+`
+  );
+  fs.writeFileSync(
+    path.join(consumerRoot, "tsconfig.json"),
+    `${JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        strict: true,
+        skipLibCheck: false,
+        esModuleInterop: false,
+        allowSyntheticDefaultImports: false,
+        noEmit: true,
+        types: ["node"],
+        typeRoots: [path.join(repositoryRoot, "node_modules/@types")]
+      },
+      files: ["consumer.ts"]
+    }, null, 2)}\n`
+  );
 
   run("npm", [
     "install",
@@ -123,6 +153,11 @@ console.log("Agent Core tarball smoke test passed.");
     "--no-fund",
     "--ignore-scripts",
     tarballPath
+  ], consumerRoot);
+  run(process.execPath, [
+    path.join(repositoryRoot, "node_modules/typescript/bin/tsc"),
+    "-p",
+    path.join(consumerRoot, "tsconfig.json")
   ], consumerRoot);
   run(process.execPath, ["smoke.mjs"], consumerRoot);
 

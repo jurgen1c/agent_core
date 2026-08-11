@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
+import fs, { type Stats } from "node:fs";
 import path from "node:path";
 
 export type FileSystemPathInspection =
-  | { status: "present"; stats: fs.Stats }
+  | { status: "present"; stats: Stats }
   | { status: "missing" }
   | { status: "inconclusive"; error: unknown };
 
@@ -59,7 +59,7 @@ export const DEFAULT_EXCLUSIVE_FILE_LOCK_RETRY_INTERVAL_MS = 25;
 
 interface AcquiredFileLock {
   handle: number;
-  identity: fs.Stats;
+  identity: Stats;
 }
 
 type SynchronousLockCallback<Callback extends () => unknown> =
@@ -314,7 +314,7 @@ function releaseOwnedFileLock(lockPath: string, acquired: AcquiredFileLock): unk
   return new AggregateError(cleanupErrors, `Multiple failures occurred while releasing ${lockPath}.`);
 }
 
-function sameFileIdentity(left: fs.Stats, right: fs.Stats): boolean {
+function sameFileIdentity(left: Stats, right: Stats): boolean {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
